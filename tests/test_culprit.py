@@ -96,13 +96,13 @@ def test_insufficient_evidence_threshold(test_db):
 
 
 def test_no_regression_threshold(test_db):
-    """Verify pass-rate drop < 0.10 returns 'no_regression'."""
+    """Verify pass-rate drop < 0.10 returns 'no_regression' even when components changed."""
     now = datetime.now(timezone.utc)
     proj = "no_reg_proj"
     test_db["projects"].insert_one({"_id": proj, "name": "NoReg", "createdAt": now})
 
     for v_id in ["A", "B"]:
-        comp = build_manifest_components("A")
+        comp = build_manifest_components(v_id)
         meta = compute_manifest_hashes(comp)
         test_db["versions"].insert_one({
             "_id": v_id,
@@ -113,7 +113,7 @@ def test_no_regression_threshold(test_db):
             "manifestHash": meta["manifestHash"],
         })
 
-    # 10 passes on A, 9 passes and 1 fail on B (drop = 0.10 - 0.05 = 0.05 < 0.10)
+    # 10 passes on A, 10 passes on B (drop = 0.0 < 0.10)
     for i in range(10):
         test_db["runs"].insert_one({
             "_id": f"run_a_{i}",
@@ -131,13 +131,62 @@ def test_no_regression_threshold(test_db):
             "versionId": "B",
             "caseId": f"c{i}",
             "attempt": 1,
-            "status": "pass" if i < 9 else "fail",
+            "status": "pass",
             "latencyMs": 100,
             "startedAt": now,
         })
 
     res = find_suspects(test_db, proj, "A", "B", min_runs=10, save=False)
     assert res["status"] == "no_regression"
+    assert res["drop"] < 0.10
+
+
+def test_no_component_change_threshold(test_db):
+    """Verify regression with no changed components returns 'no_component_change'."""
+    now = datetime.now(timezone.utc)
+    proj = "no_comp_proj"
+    test_db["projects"].insert_one({"_id": proj, "name": "NoComp", "createdAt": now})
+
+    for v_id in ["A", "B"]:
+        # Both versions have identical components
+        comp = build_manifest_components("A")
+        meta = compute_manifest_hashes(comp)
+        test_db["versions"].insert_one({
+            "_id": v_id,
+            "projectId": proj,
+            "createdAt": now,
+            "components": comp,
+            "hashes": meta["hashes"],
+            "manifestHash": meta["manifestHash"],
+        })
+
+    # 10 passes on A, 10 fails on B (drop = 1.0 >= 0.10, but no component changed)
+    for i in range(10):
+        test_db["runs"].insert_one({
+            "_id": f"run_a_{i}",
+            "projectId": proj,
+            "versionId": "A",
+            "caseId": f"c{i}",
+            "attempt": 1,
+            "status": "pass",
+            "latencyMs": 100,
+            "startedAt": now,
+        })
+        test_db["runs"].insert_one({
+            "_id": f"run_b_{i}",
+            "projectId": proj,
+            "versionId": "B",
+            "caseId": f"c{i}",
+            "attempt": 1,
+            "status": "fail",
+            "latencyMs": 100,
+            "startedAt": now,
+        })
+
+    res = find_suspects(test_db, proj, "A", "B", min_runs=10, save=False)
+    assert res["status"] == "no_component_change"
+    assert "No component definitions changed" in res["uncertainty"][0]
+
 
 
 def test_two_changed_components_lowers_exclusivity(test_db):
