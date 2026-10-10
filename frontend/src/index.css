@@ -2,10 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-app: #0B1117;
+  --bg-nav: #0F1720;
+  --bg-card: #141F2B;
+  --bg-hover: #192734;
+  --bg-input: #101923;
+
+  --border-default: #263746;
+  --border-subtle: #1D2A36;
+  --border-focus: #42D6C5;
+
+  --accent-teal: #14B8A6;
+  --accent-teal-hover: #0D9488;
+  --accent-teal-soft: #123A3A;
+  --accent-cyan: #67E8F9;
+
+  --text-primary: #E6EDF3;
+  --text-secondary: #A4B3C2;
+  --text-muted: #718396;
+  --text-disabled: #526170;
+
+  --status-success: #34D399;
+  --status-warning: #FBBF24;
+  --status-error: #FB7185;
+  --status-info: #67E8F9;
+}
+
 @layer base {
   body {
-    background-color: #090c13;
-    color: #e2e8f0;
+    background-color: #0B1117;
+    color: #E6EDF3;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 }
@@ -17,27 +44,20 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #090c13;
+  background: #0B1117;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e2638;
+  background: #263746;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a354c;
+  background: #374B5E;
 }
 
-/* Custom subtle glow effects */
-.glow-purple {
-  box-shadow: 0 0 20px -3px rgba(124, 58, 237, 0.25);
-}
-
-.glow-amber {
-  box-shadow: 0 0 20px -3px rgba(245, 158, 11, 0.15);
-}
-
-.glow-emerald {
-  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.2);
+/* Accessible focus ring */
+*:focus-visible {
+  outline: 2px solid #42D6C5;
+  outline-offset: 1px;
 }

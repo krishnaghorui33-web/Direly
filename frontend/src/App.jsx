@@ -70,7 +70,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090c13] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#0B1117] text-[#E6EDF3] flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <Header
         onRefresh={loadData}
@@ -109,7 +109,7 @@ export default function App() {
               <div className="pt-4 flex justify-end">
                 <button
                   onClick={() => setActiveSection('failures')}
-                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                  className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] active:bg-[#0F766E] text-[#0B1117] rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-colors"
                 >
                   <span>Step 2: Inspect Failure Patterns</span>
                   <ArrowRight className="w-4 h-4" />
@@ -133,7 +133,7 @@ export default function App() {
               <div className="pt-4 flex items-center justify-between">
                 <button
                   onClick={() => setActiveSection('overview')}
-                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 bg-[#141F2B] hover:bg-[#192734] border border-[#263746] text-[#A4B3C2] hover:text-[#E6EDF3] rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Overview</span>
@@ -141,7 +141,7 @@ export default function App() {
 
                 <button
                   onClick={() => setActiveSection('diagnosis')}
-                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                  className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] active:bg-[#0F766E] text-[#0B1117] rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-colors"
                 >
                   <span>Step 3: See Likely Culprit</span>
                   <ArrowRight className="w-4 h-4" />
@@ -167,7 +167,7 @@ export default function App() {
               <div className="pt-4 flex items-center justify-between">
                 <button
                   onClick={() => setActiveSection('failures')}
-                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 bg-[#141F2B] hover:bg-[#192734] border border-[#263746] text-[#A4B3C2] hover:text-[#E6EDF3] rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Failure Patterns</span>
@@ -175,7 +175,7 @@ export default function App() {
 
                 <button
                   onClick={() => setActiveSection('verification')}
-                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                  className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] active:bg-[#0F766E] text-[#0B1117] rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-colors"
                 >
                   <span>Step 4: Verify Fix with Replay</span>
                   <ArrowRight className="w-4 h-4" />
@@ -197,7 +197,7 @@ export default function App() {
               <div className="pt-4 flex items-center justify-between">
                 <button
                   onClick={() => setActiveSection('diagnosis')}
-                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 bg-[#141F2B] hover:bg-[#192734] border border-[#263746] text-[#A4B3C2] hover:text-[#E6EDF3] rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Back to Diagnosis</span>
@@ -205,7 +205,7 @@ export default function App() {
 
                 <button
                   onClick={() => setActiveSection('backend')}
-                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                  className="px-4 py-2.5 bg-[#14B8A6] hover:bg-[#0D9488] active:bg-[#0F766E] text-[#0B1117] rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-colors"
                 >
                   <span>Step 5: View System Architecture</span>
                   <ArrowRight className="w-4 h-4" />

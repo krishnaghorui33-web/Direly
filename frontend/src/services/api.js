@@ -142,7 +142,7 @@ export const DEMO_DATA = {
         detail: 'Schema contract mismatch',
         matchScore: '98.4%',
         badge: 'PRIMARY SUSPECT',
-        badgeColor: 'purple'
+        badgeColor: 'teal'
       },
       {
         rank: 2,

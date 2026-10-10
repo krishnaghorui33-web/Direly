@@ -8,23 +8,35 @@ export default {
   theme: {
     extend: {
       colors: {
-        direly: {
-          bg: '#0a0d14',
-          surface: '#0f1420',
-          card: '#131926',
-          border: '#1e2638',
-          hover: '#182133',
-          purple: {
-            DEFAULT: '#7c3aed',
-            light: '#9061f9',
-            dark: '#6d28d9',
-            glow: 'rgba(124, 58, 237, 0.15)',
-          },
-          cyan: '#06b6d4',
-          emerald: '#10b981',
-          amber: '#f59e0b',
-          rose: '#f43f5e',
-          slate: '#94a3b8',
+        bg: {
+          app: '#0B1117',
+          nav: '#0F1720',
+          card: '#141F2B',
+          hover: '#192734',
+          input: '#101923',
+        },
+        border: {
+          DEFAULT: '#263746',
+          subtle: '#1D2A36',
+          focus: '#42D6C5',
+        },
+        accent: {
+          teal: '#14B8A6',
+          'teal-hover': '#0D9488',
+          'teal-soft': '#123A3A',
+          cyan: '#67E8F9',
+        },
+        txt: {
+          primary: '#E6EDF3',
+          secondary: '#A4B3C2',
+          muted: '#718396',
+          disabled: '#526170',
+        },
+        status: {
+          success: '#34D399',
+          warning: '#FBBF24',
+          error: '#FB7185',
+          info: '#67E8F9',
         }
       },
       fontFamily: {
