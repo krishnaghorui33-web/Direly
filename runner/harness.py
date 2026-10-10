@@ -25,16 +25,17 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from agent.agent import AgentTrace, OrderBot
-from agent.manifests import build_manifest_components
-from runner.cases import ATTEMPTS_PER_CASE, CASES, Case
+from runner.agent import AgentTrace, OrderBot
+from runner.manifests import build_manifest_components
+from runner.cases import ATTEMPTS_PER_CASE, Case
 from runner.faults import timeout_for
 
-SUITE_VERSION = "1.0.0"
+# Imported for the eventId formula only. This is a pure function with no
+# database access, so the runner stays free of MongoDB while producing ids the
+# backend's duplicate-key index recognises.
+from backend.app.analysis.event_store import compute_event_id
 
-# Spacing between consecutive runs' start times. Combined with the per-event
-# offsets inside a run, this guarantees every ts in a version is distinct.
-_RUN_SPACING = timedelta(seconds=2)
+SUITE_VERSION = "1.0.0"
 
 
 @dataclass
@@ -47,12 +48,19 @@ class ExecutionResult:
         events (List[Dict[str, Any]]): Event documents, ready for
             insert_events_safe.
         stats (Dict[str, int]): Counters summarising the run.
+        details (Dict[str, Any]): Richer per-version statistics, including the
+            measured pass rate and the failed case ids.
+        runner_errors (List[Dict[str, Any]]): Cases that failed because the
+            harness raised, rather than because the agent misbehaved. Empty in a
+            healthy run. Populated by runner.evaluator.
     """
 
     version_id: str
     runs: List[Dict[str, Any]] = field(default_factory=list)
     events: List[Dict[str, Any]] = field(default_factory=list)
     stats: Dict[str, int] = field(default_factory=dict)
+    details: Dict[str, Any] = field(default_factory=dict)
+    runner_errors: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def run_case_attempt(
@@ -110,6 +118,12 @@ def run_case_attempt(
     for index, event in enumerate(trace.events, start=1):
         event_docs.append(
             {
+                # Computed here rather than left to insert_events_safe. The
+                # events validator requires eventId, and the HTTP submit path
+                # has to be able to ship complete records. Using the backend's
+                # own formula keeps the id identical whichever route ingests it,
+                # so the duplicate-key index still makes re-submission idempotent.
+                "eventId": compute_event_id(run_id, index, event.type),
                 "runId": run_id,
                 "projectId": project_id,
                 "versionId": version_id,
@@ -125,48 +139,34 @@ def run_case_attempt(
 
 def execute_version(
     version_id: str,
-    project_id: str,
-    base_time: datetime,
+    project_id: str = "orderbot",
+    base_time: Optional[datetime] = None,
     attempts: int = ATTEMPTS_PER_CASE,
 ) -> ExecutionResult:
     """Execute the whole suite against one version.
 
+    Thin delegate to runner.evaluator.evaluate_version, which owns the execution
+    loop and the runner-error handling. This alias exists because
+    scripts/seed_demo.py calls it, and keeping one implementation means the
+    seeder and the evaluator can never drift apart.
+
     Args:
         version_id (str): Version to execute.
         project_id (str): Project identifier.
-        base_time (datetime): Timestamp for the first run.
+        base_time (Optional[datetime]): Timestamp for the first run.
         attempts (int): Attempts per case.
 
     Returns:
         ExecutionResult: The run and event documents plus summary counters.
     """
-    components = build_manifest_components(version_id)
-    result = ExecutionResult(version_id=version_id)
+    from runner.evaluator import evaluate_version
 
-    cursor = 0
-    for case in CASES:
-        for attempt in range(1, attempts + 1):
-            started_at = base_time + _RUN_SPACING * cursor
-            cursor += 1
-
-            executed = run_case_attempt(
-                case=case,
-                version_id=version_id,
-                attempt=attempt,
-                project_id=project_id,
-                started_at=started_at,
-                components=components,
-            )
-            result.runs.append(executed["run"])
-            result.events.extend(executed["events"])
-
-    result.stats = {
-        "runs": len(result.runs),
-        "events": len(result.events),
-        "passes": sum(1 for r in result.runs if r["status"] == "pass"),
-        "failures": sum(1 for r in result.runs if r["status"] == "fail"),
-    }
-    return result
+    return evaluate_version(
+        version_id=version_id,
+        project_id=project_id,
+        base_time=base_time,
+        attempts=attempts,
+    )
 
 
 def summarize(result: ExecutionResult) -> Dict[str, Any]:

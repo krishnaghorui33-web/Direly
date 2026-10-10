@@ -119,7 +119,7 @@ def print_faults() -> None:
         )
     print(
         "\n  Be ready for the question 'did you just hardcode version B as broken?'\n"
-        "  The answer is that nothing in agent/ or runner/ can produce the B\n"
+        "  The answer is that nothing in runner/ can produce the B\n"
         "  failure. The agent sends whatever name its code says; the B schema\n"
         "  requires the other one; validation rejects it. The failure is computed,\n"
         "  not injected. Only the timeouts above are injected, and they are\n"
@@ -208,9 +208,24 @@ def print_steps() -> None:
     """Print the numbered live-demo steps."""
     _section("LIVE DEMO STEPS")
     steps = [
-        "Seed the database.",
+        "Show the runner working, no database needed.",
+        "    python -m runner",
+        "    A 58/60, B 22/60, C 60/60. 'runner errors: none'.",
+        "    Nothing is hand-written: these numbers are counted from records.",
+        "",
+        "Prove the regression is real, still no database.",
+        "    python -m runner --selfcheck",
+        "    Version B fails for exactly one reason, and it is named:",
+        "        unexpected argument 'order_id' for get_order",
+        "",
+        "Then send the records to the backend.",
+        "    python -m runner --submit --base-url http://localhost:8000",
+        "    (Once Shlok's routes exist. Today there is no FastAPI app yet,",
+        "    so this step fails with 'is the backend running?' -- which is",
+        "    the honest answer at this stage.)",
+        "",
+        "To populate MongoDB directly for the analysis tests:",
         "    python scripts/seed_demo.py",
-        "    Point out that it executes the agent; nothing is hand-written.",
         "",
         "Open the dashboard, Versions tab.",
         "    A ~97% pass, B ~37% pass, C 100% pass.",
@@ -249,7 +264,7 @@ def print_steps() -> None:
         "  Q: Is version B hardcoded as broken?\n"
         "  A: No. The agent and the schema disagree, and the validator rejects\n"
         "     the call. Point at get_agent_param_name vs get_order_param_name in\n"
-        "     agent/manifests.py -- two functions, two independent answers.\n"
+        "     runner/manifests.py -- two functions, two independent answers.\n"
         "\n"
         "  Q: What if the diagnosis is wrong?\n"
         "  A: It is computed from stored events, so it is re-runnable and\n"

@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from pymongo.database import Database
 
-from agent.manifests import build_manifest_components
+from runner.manifests import build_manifest_components
 from backend.app.analysis.compare import compute_manifest_hashes
 from backend.app.analysis.culprit import find_suspects
 from backend.app.analysis.event_store import insert_events_safe
@@ -52,7 +52,7 @@ def build_manifest_components_for(version_id: str) -> Dict[str, Any]:
     """Return the stored manifest components for a version.
 
     Thin wrapper kept so the seeder has one obvious place to reach the agent's
-    manifests. Equivalent to agent.manifests.build_manifest_components.
+    manifests. Equivalent to runner.manifests.build_manifest_components.
 
     Args:
         version_id (str): One of "A", "B", "C".

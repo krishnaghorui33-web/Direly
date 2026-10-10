@@ -1,6 +1,6 @@
 """No-database proof that the agent behaves correctly across versions.
 
-Run with:  python -m agent.selfcheck
+Run with:  python -m runner.selfcheck
 
 This is the check that matters most, because it needs no Atlas connection and no
 MongoDB. It exercises the agent directly and asserts that:
@@ -20,8 +20,8 @@ import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from agent.agent import OrderBot
-from agent.manifests import build_manifest_components
+from runner.agent import OrderBot
+from runner.manifests import build_manifest_components
 from backend.app.analysis.patterns import classify_error, fingerprint_error
 
 BASE_TIME = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
