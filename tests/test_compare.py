@@ -63,3 +63,47 @@ def test_compare_versions_with_db(test_db):
     # Mismatched project raises ValueError
     with pytest.raises(ValueError, match="different project"):
         compare_versions(test_db, "wrong_project_id", f"{proj_id}_A", f"{proj_id}_B")
+
+
+def test_compare_versions_prompt_diff_and_other_components(test_db):
+    """Verify prompt unified diff and other component diff reporting."""
+    now = datetime.now(timezone.utc)
+    proj_id = "test_diff_proj"
+
+    test_db["projects"].insert_one({"_id": proj_id, "name": "Diff Test", "createdAt": now})
+
+    comp_v1 = build_manifest_components("A")
+    meta_v1 = compute_manifest_hashes(comp_v1)
+    test_db["versions"].insert_one({
+        "_id": "v1",
+        "projectId": proj_id,
+        "createdAt": now,
+        "components": comp_v1,
+        "hashes": meta_v1["hashes"],
+        "manifestHash": meta_v1["manifestHash"],
+    })
+
+    comp_v2 = build_manifest_components("A")
+    comp_v2["prompt"] = "You are a specialized order management assistant.\nHelp customers directly."
+    comp_v2["model"] = {"name": "gpt-4o-mini", "temperature": 0.2}
+    meta_v2 = compute_manifest_hashes(comp_v2)
+    test_db["versions"].insert_one({
+        "_id": "v2",
+        "projectId": proj_id,
+        "createdAt": now,
+        "components": comp_v2,
+        "hashes": meta_v2["hashes"],
+        "manifestHash": meta_v2["manifestHash"],
+    })
+
+    res = compare_versions(test_db, proj_id, "v1", "v2")
+    assert "prompt" in res["changedComponents"]
+    assert "model" in res["changedComponents"]
+    assert "tools" in res["unchangedComponents"]
+
+    # Verify unified diff exists
+    assert "unifiedDiff" in res["prompt"]
+    assert len(res["prompt"]["unifiedDiff"]) > 0
+    assert res["model"]["old"]["name"] == "gpt-4o"
+    assert res["model"]["new"]["name"] == "gpt-4o-mini"
+

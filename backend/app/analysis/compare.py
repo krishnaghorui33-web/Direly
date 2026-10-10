@@ -138,11 +138,11 @@ def compare_versions(
 
     if baseline_doc.get("projectId") != project_id:
         raise ValueError(
-            f"Baseline version '{baseline_version_id}' belongs to project '{baseline_doc.get('projectId')}', expected '{project_id}'."
+            f"Baseline version '{baseline_version_id}' belongs to a different project: expected '{project_id}', got '{baseline_doc.get('projectId')}'."
         )
     if candidate_doc.get("projectId") != project_id:
         raise ValueError(
-            f"Candidate version '{candidate_version_id}' belongs to project '{candidate_doc.get('projectId')}', expected '{project_id}'."
+            f"Candidate version '{candidate_version_id}' belongs to a different project: expected '{project_id}', got '{candidate_doc.get('projectId')}'."
         )
 
     base_components = baseline_doc.get("components") or {}
