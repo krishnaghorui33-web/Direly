@@ -2,14 +2,22 @@
 
 from datetime import datetime, timezone, timedelta
 import hashlib
+import os
 import random
-import uuid
-from typing import Any, Dict, List, Optional
+import sys
+import time
+from typing import Any, Dict, Optional
+
+# Ensure repository root is in python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from pymongo.database import Database
 
 from backend.app.db import get_db, setup_db
 from backend.app.analysis.compare import compute_manifest_hashes
 from backend.app.analysis.event_store import insert_events_safe
+from backend.app.analysis.culprit import find_suspects
+from backend.app.analysis.verify import verify_fix
 
 
 def build_manifest_components(version_id: str) -> Dict[str, Any]:
@@ -17,7 +25,7 @@ def build_manifest_components(version_id: str) -> Dict[str, Any]:
     prompt = "You are an AI order processing agent. Help users check order statuses, process refunds, and search return policies."
     model = {"name": "gpt-4o", "temperature": 0.0}
     retrieval = {"index": "order_policies_v1", "topK": 3}
-    code = {"commit": "c0ffee11" if version_id != "C" else "c0ffee22"}
+    code = {"commit": "c0ffee11" if version_id != "C" else "c0ffee22_fix_orderId"}
 
     tool_refund = {
         "name": "refund_order",
@@ -73,20 +81,36 @@ def build_manifest_components(version_id: str) -> Dict[str, Any]:
     }
 
 
-def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
+def seed_demo(db: Optional[Database] = None, run_analysis: bool = True) -> Dict[str, Any]:
     """Seed benchmark project 'orderbot' with versions A, B, and C (60 runs each).
 
     Args:
         db (Optional[Database]): PyMongo Database instance. Defaults to get_db().
+        run_analysis (bool): Whether to run find_suspects and verify_fix at the end.
 
     Returns:
-        Dict[str, Any]: Summary of seeded versions, runs, and events.
+        Dict[str, Any]: Summary of seeded versions, runs, events, and analysis results.
     """
     database = db if db is not None else get_db()
+
+    # 1. Database Connection & Warning
+    print(f"Target database: {database.name}")
+    print("WARNING: Clearing existing 'orderbot' data in 3 seconds. Press Ctrl+C to abort...")
+    time.sleep(3)
+
+    # Apply idempotent schema validators and indexes
     setup_db(database)
 
-    # 1. Project document with dependencyMap
+    # 2. Data Clearing
     project_id = "orderbot"
+    print("Clearing existing 'orderbot' data...")
+    database["projects"].delete_many({"_id": project_id})
+    database["versions"].delete_many({"projectId": project_id})
+    database["runs"].delete_many({"projectId": project_id})
+    database["events"].delete_many({"projectId": project_id})
+    database["findings"].delete_many({"projectId": project_id})
+
+    # 3. Insert project
     project_doc = {
         "_id": project_id,
         "name": "OrderBot",
@@ -95,9 +119,9 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
             "get_order": ["refund_order", "order_tracking_workflow"],
         },
     }
-    database["projects"].replace_one({"_id": project_id}, project_doc, upsert=True)
+    database["projects"].insert_one(project_doc)
 
-    # 2. Versions A, B, C
+    # 4. Insert versions A, B, C
     base_time = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
     version_ids = ["A", "B", "C"]
 
@@ -113,17 +137,15 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
             "hashes": manifest_meta["hashes"],
             "manifestHash": manifest_meta["manifestHash"],
         }
-        database["versions"].replace_one({"_id": v_id}, v_doc, upsert=True)
+        database["versions"].insert_one(v_doc)
 
-    # 3. 20 cases (c01 - c20) x 3 attempts = 60 runs per version
+    # 5. Populate Scenario: 20 cases (c01 - c20) x 3 attempts = 60 runs per version
     cases = [f"c{i:02d}" for i in range(1, 21)]
-    order_cases = set(cases[:12])  # c01 to c12 exercise get_order / refund_order
+    order_cases = set(cases[:12])  # c01 to c12 exercise get_order
 
+    rng = random.Random(42)
     total_runs_created = 0
     total_events_created = 0
-
-    # Deterministic seed for reproducible runs
-    rng = random.Random(42)
 
     for v_id in version_ids:
         v_runs = []
@@ -134,7 +156,6 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
                 run_id = f"run_{project_id}_{v_id}_{case_id}_att{attempt}"
                 run_start = base_time + timedelta(hours=attempt, minutes=int(case_id[1:]))
 
-                # Determine outcome status
                 status = "pass"
                 failed_checks = []
                 error_msg = None
@@ -142,40 +163,32 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
                 error_pattern = None
 
                 if v_id == "A":
-                    # Incidental timeout on c15 att 2
-                    if case_id == "c15" and attempt == 2:
+                    # Flaky case c03: fails attempt 1, passes attempts 2/3
+                    if case_id == "c03" and attempt == 1:
+                        status = "fail"
+                        failed_checks = ["timeout"]
+                        error_msg = "Gateway timed out during policy retrieval"
+                        error_pattern = "timeout"
+                    # Incidental timeout on c15 attempt 2
+                    elif case_id == "c15" and attempt == 2:
                         status = "fail"
                         failed_checks = ["timeout"]
                         error_msg = "Model request timed out after 30000ms"
                         error_pattern = "timeout"
-                    # Real flaky case on c03: att 1 pass, att 2 fail, att 3 pass
-                    elif case_id == "c03" and attempt == 2:
-                        status = "fail"
-                        failed_checks = ["tool_result"]
-                        error_msg = "Gateway timed out during policy retrieval"
-                        error_pattern = "timeout"
                 elif v_id == "B":
-                    # Every attempt of c01 to c12 fails due to renamed argument
+                    # Regression: c01 to c12 fail every attempt
                     if case_id in order_cases:
                         status = "fail"
-                        failed_checks = ["invalid_arguments"]
+                        failed_checks = ["invalid_tool_args"]
                         tx_hash = hashlib.sha1(f"{case_id}_{attempt}_{rng.randint(1000, 9999)}".encode()).hexdigest()[:16]
                         digits = rng.randint(100, 999)
                         error_msg = f"missing required argument: orderId in txn {tx_hash} (code {digits})"
                         error_tool = "get_order"
                         error_pattern = "invalid_tool_args"
-                    elif case_id == "c18" and attempt == 3:
-                        status = "fail"
-                        failed_checks = ["timeout"]
-                        error_msg = "Connection timed out"
-                        error_pattern = "timeout"
+                    # Remaining 8 cases (c13-c20) pass
                 elif v_id == "C":
-                    # Fix: c01-c12 pass; rare incidental timeout
-                    if case_id == "c20" and attempt == 1:
-                        status = "fail"
-                        failed_checks = ["timeout"]
-                        error_msg = "Model generation timed out"
-                        error_pattern = "timeout"
+                    # Fix: all pass
+                    status = "pass"
 
                 run_doc = {
                     "_id": run_id,
@@ -254,13 +267,34 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
                 })
 
         # Save runs
-        for r in v_runs:
-            database["runs"].replace_one({"_id": r["_id"]}, r, upsert=True)
+        database["runs"].insert_many(v_runs)
         total_runs_created += len(v_runs)
 
         # Ingest events safely through insert_events_safe
         ingest_res = insert_events_safe(database, v_events)
         total_events_created += ingest_res["inserted"]
+
+    diagnosis_result = None
+    verification_result = None
+
+    # 5. Integration: execute find_suspects(A, B) and verify_fix(B, C) to populate findings
+    if run_analysis:
+        print("Running find_suspects('A', 'B')...")
+        diagnosis_result = find_suspects(database, project_id, "A", "B", min_runs=10, save=True)
+        top_susp = diagnosis_result["suspects"][0] if diagnosis_result.get("suspects") else None
+        if top_susp:
+            print(f"Top Suspect: {top_susp['component']} (confidence: {top_susp['confidence']}, score: {top_susp['score']})")
+
+        print("Running verify_fix('B', 'C', baseline='A')...")
+        verification_result = verify_fix(
+            database,
+            project_id,
+            bad_version_id="B",
+            fix_version_id="C",
+            baseline_version_id="A",
+            min_runs=10,
+        )
+        print(f"Verification Result: {verification_result['result']} (status: {verification_result['newStatus']})")
 
     return {
         "status": "success",
@@ -268,9 +302,11 @@ def seed_demo(db: Optional[Database] = None) -> Dict[str, Any]:
         "versions": version_ids,
         "totalRuns": total_runs_created,
         "totalEvents": total_events_created,
+        "diagnosis": diagnosis_result,
+        "verification": verification_result,
     }
 
 
 if __name__ == "__main__":
     result = seed_demo()
-    print(f"Seeding completed: {result}")
+    print(f"\nSeeding complete: {result['totalRuns']} runs and {result['totalEvents']} events inserted.")
