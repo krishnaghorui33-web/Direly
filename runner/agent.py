@@ -134,7 +134,7 @@ class OrderBot:
         if "refund" in lowered and order_id:
             return [
                 get_order_call,
-                {"tool": "refund_order", "args": {"order_id": order_id, "reason": "customer_request"}},
+                {"tool": "refund_order", "args": {"order_id": order_id}},
             ]
         if order_id and ("order" in lowered or "status" in lowered or "track" in lowered):
             return [get_order_call]

@@ -218,7 +218,6 @@ def execute_tool(
         return {
             "refundId": sha1_hex(f"refund:{order_key}")[:12],
             "orderId": order_key,
-            "reason": args.get("reason", "customer_request"),
             "status": "refund_queued",
         }
 

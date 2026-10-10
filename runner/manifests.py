@@ -91,7 +91,6 @@ def _refund_order_tool() -> Dict[str, Any]:
             "type": "object",
             "properties": {
                 "order_id": {"type": "string", "description": "Order ID"},
-                "reason": {"type": "string", "description": "Why the refund is being issued"},
             },
             "required": ["order_id"],
         },
