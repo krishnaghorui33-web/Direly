@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import SimpleStoryView from './components/SimpleStoryView';
 import OverviewBanner from './components/OverviewBanner';
 import MetricCards from './components/MetricCards';
 import CohortMatrix from './components/CohortMatrix';
@@ -9,6 +10,7 @@ import CulpritAttribution from './components/CulpritAttribution';
 import EventProgression from './components/EventProgression';
 import FixVerification from './components/FixVerification';
 import TraceModal from './components/TraceModal';
+import { Sparkles, Sliders, Layers } from 'lucide-react';
 import { 
   fetchComparison, 
   fetchFindings, 
@@ -17,6 +19,7 @@ import {
 } from './services/api';
 
 export default function App() {
+  const [viewMode, setViewMode] = useState('story'); // 'story' (simple & friendly) | 'advanced' (deep logs)
   const [activeSection, setActiveSection] = useState('overview');
   const [data, setData] = useState(DEMO_DATA);
   const [isLiveApi, setIsLiveApi] = useState(false);
@@ -83,62 +86,115 @@ export default function App() {
         {/* Left Sidebar */}
         <Sidebar
           activeSection={activeSection}
-          onSelectSection={setActiveSection}
+          onSelectSection={(id) => {
+            setActiveSection(id);
+            if (viewMode === 'story' && (id === 'failures' || id === 'diagnosis')) {
+              // Stay in story mode or switch seamlessly
+            }
+          }}
           isLiveApi={isLiveApi}
           onToggleApiMode={handleToggleApiMode}
         />
 
         {/* Content Workspace Area */}
-        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-6 max-w-7xl">
-          {/* Section 1: Overview & Metrics */}
-          <section id="overview" className="space-y-4">
-            <OverviewBanner 
-              metrics={data.metrics} 
-              project={data.project} 
-            />
-            <MetricCards 
-              metrics={data.metrics} 
-            />
-            <CohortMatrix 
-              cohort={data.cohort} 
-            />
-          </section>
+        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-5 max-w-7xl">
+          {/* Top Mode Selector: Simple Friendly View vs Advanced Trace */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0f1422] border border-[#1e2638] rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Dashboard Presentation Mode:</span>
+              <span className="font-semibold text-white text-xs">
+                {viewMode === 'story' ? 'Guided Story (Simple & Friendly)' : 'Advanced Trace (Full Developer View)'}
+              </span>
+            </div>
 
-          {/* Section 2: Failure Patterns */}
-          <section id="failures" className="pt-2">
-            <FailurePatterns
-              patterns={data.failurePatterns}
-              selectedPatternId={selectedPatternId}
-              onSelectPattern={setSelectedPatternId}
-              selectedCaseId={selectedCaseId}
-              onSelectCase={setSelectedCaseId}
-            />
-          </section>
+            <div className="flex items-center gap-2 bg-[#0a0d14] p-1 rounded-lg border border-[#1c273e]">
+              <button
+                onClick={() => setViewMode('story')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
+                  viewMode === 'story'
+                    ? 'bg-purple-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Simple Story Mode (Recommended)</span>
+              </button>
 
-          {/* Section 3: Diagnosis & Likely Culprit */}
-          <section id="diagnosis" className="pt-2">
-            <CulpritAttribution
-              attribution={data.culpritAttribution}
-              onInspectTrace={() => setIsTraceModalOpen(true)}
-            />
-          </section>
+              <button
+                onClick={() => setViewMode('advanced')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
+                  viewMode === 'advanced'
+                    ? 'bg-purple-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Advanced Developer Trace</span>
+              </button>
+            </div>
+          </div>
 
-          {/* Section 4: Execution Event Trace Timeline */}
-          <section id="trace" className="pt-2">
-            <EventProgression
-              eventProgression={data.eventProgression}
-              selectedCaseId={selectedCaseId}
-            />
-          </section>
-
-          {/* Section 5: Fix Verification & Replay */}
-          <section id="verification" className="pt-2 pb-8">
-            <FixVerification
-              verificationData={data.fixVerification}
+          {/* VIEW 1: Simple Friendly Story View */}
+          {viewMode === 'story' ? (
+            <SimpleStoryView
+              data={data}
               onTriggerReplay={handleReplay}
               isReplaying={isReplaying}
             />
-          </section>
+          ) : (
+            /* VIEW 2: Advanced Detailed Technical View */
+            <div className="space-y-6">
+              {/* Section 1: Overview & Metrics */}
+              <section id="overview" className="space-y-4">
+                <OverviewBanner 
+                  metrics={data.metrics} 
+                  project={data.project} 
+                />
+                <MetricCards 
+                  metrics={data.metrics} 
+                />
+                <CohortMatrix 
+                  cohort={data.cohort} 
+                />
+              </section>
+
+              {/* Section 2: Failure Patterns */}
+              <section id="failures" className="pt-2">
+                <FailurePatterns
+                  patterns={data.failurePatterns}
+                  selectedPatternId={selectedPatternId}
+                  onSelectPattern={setSelectedPatternId}
+                  selectedCaseId={selectedCaseId}
+                  onSelectCase={setSelectedCaseId}
+                />
+              </section>
+
+              {/* Section 3: Diagnosis & Likely Culprit */}
+              <section id="diagnosis" className="pt-2">
+                <CulpritAttribution
+                  attribution={data.culpritAttribution}
+                  onInspectTrace={() => setIsTraceModalOpen(true)}
+                />
+              </section>
+
+              {/* Section 4: Execution Event Trace Timeline */}
+              <section id="trace" className="pt-2">
+                <EventProgression
+                  eventProgression={data.eventProgression}
+                  selectedCaseId={selectedCaseId}
+                />
+              </section>
+
+              {/* Section 5: Fix Verification & Replay */}
+              <section id="verification" className="pt-2 pb-8">
+                <FixVerification
+                  verificationData={data.fixVerification}
+                  onTriggerReplay={handleReplay}
+                  isReplaying={isReplaying}
+                />
+              </section>
+            </div>
+          )}
         </main>
       </div>
 
