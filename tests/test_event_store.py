@@ -112,3 +112,64 @@ def test_duplicate_events_and_storage_with_db(test_db):
     assert res2["duplicates"] == 3
     assert len(res2["rejected"]) == 0
     assert test_db["events"].count_documents({"runId": "r100"}) == 3
+
+
+def test_invalid_events_and_rejections_with_db(test_db):
+    """Verify that invalid events land in rejected, duplicates in duplicates, and valid ones insert."""
+    now = datetime.now(timezone.utc)
+    mixed_batch = [
+        # Valid event
+        {
+            "runId": "r_valid_01",
+            "projectId": "orderbot",
+            "versionId": "A",
+            "seq": 1,
+            "type": "user_input",
+            "ts": now,
+            "payload": {"text": "hello"},
+        },
+        # Invalid event 1: missing runId
+        {
+            "projectId": "orderbot",
+            "versionId": "A",
+            "seq": 2,
+            "type": "user_input",
+            "ts": now,
+            "payload": {"text": "missing runId"},
+        },
+        # Invalid event 2: unknown event type
+        {
+            "runId": "r_invalid_02",
+            "projectId": "orderbot",
+            "versionId": "A",
+            "seq": 3,
+            "type": "unrecognized_lifecycle_event",
+            "ts": now,
+            "payload": {},
+        },
+    ]
+
+    res = insert_events_safe(test_db, mixed_batch)
+    assert res["inserted"] == 1
+    assert res["duplicates"] == 0
+    assert len(res["rejected"]) == 2
+
+    # Check rejected indices and reasons
+    assert res["rejected"][0]["index"] == 1
+    assert "Missing required field" in res["rejected"][0]["reason"]
+    assert "runId" in res["rejected"][0]["reason"]
+
+    assert res["rejected"][1]["index"] == 2
+    assert "Invalid event type" in res["rejected"][1]["reason"]
+
+    # Verify only the valid event is stored
+    assert test_db["events"].count_documents({"runId": "r_valid_01"}) == 1
+    assert test_db["events"].count_documents({"runId": "r_invalid_02"}) == 0
+
+    # Ingesting same mixed batch again: inserted 0, duplicates 1, rejected 2
+    res_repeat = insert_events_safe(test_db, mixed_batch)
+    assert res_repeat["inserted"] == 0
+    assert res_repeat["duplicates"] == 1
+    assert len(res_repeat["rejected"]) == 2
+    assert test_db["events"].count_documents({"runId": "r_valid_01"}) == 1
+

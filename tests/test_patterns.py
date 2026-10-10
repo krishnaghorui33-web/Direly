@@ -139,3 +139,40 @@ def test_normalize_error_message():
     assert "<ID>" in normalized
     assert "orderid" in normalized
     assert "   " not in normalized
+
+
+def test_order_id_and_orderId_preserved_in_text_with_differing_numbers():
+    """Verify same error with different numbers gives one fingerprint while order_id and orderId stay in text."""
+    # 1. order_id with different numbers
+    msg_id_1 = "missing required argument: order_id (run 101, code 4820)"
+    msg_id_2 = "missing required argument: order_id (run 999, code 8831)"
+
+    norm_id_1 = normalize_error_message(msg_id_1)
+    norm_id_2 = normalize_error_message(msg_id_2)
+
+    assert "order_id" in norm_id_1
+    assert "order_id" in norm_id_2
+    assert norm_id_1 == norm_id_2 == "missing required argument: order_id (run <N>, code <N>)"
+
+    fp_id_1 = fingerprint_error({"payload": {"tool": "get_order", "message": msg_id_1}})
+    fp_id_2 = fingerprint_error({"payload": {"tool": "get_order", "message": msg_id_2}})
+    assert fp_id_1 == fp_id_2
+
+    # 2. orderId with different numbers
+    msg_camel_1 = "missing required argument: orderId (run 101, code 4820)"
+    msg_camel_2 = "missing required argument: orderId (run 999, code 8831)"
+
+    norm_camel_1 = normalize_error_message(msg_camel_1)
+    norm_camel_2 = normalize_error_message(msg_camel_2)
+
+    assert "orderid" in norm_camel_1
+    assert "orderid" in norm_camel_2
+    assert norm_camel_1 == norm_camel_2 == "missing required argument: orderid (run <N>, code <N>)"
+
+    fp_camel_1 = fingerprint_error({"payload": {"tool": "get_order", "message": msg_camel_1}})
+    fp_camel_2 = fingerprint_error({"payload": {"tool": "get_order", "message": msg_camel_2}})
+    assert fp_camel_1 == fp_camel_2
+
+    # 3. order_id and orderId produce different fingerprints
+    assert fp_id_1 != fp_camel_1
+
