@@ -1,4 +1,4 @@
-"""Tests for fix verification logic and findings status transitions (Section 9)."""
+"""Tests for regression fix verification rules and finding status transitions (Section 7 & 9)."""
 
 import pytest
 
@@ -8,46 +8,108 @@ from scripts.seed_demo import seed_demo
 
 
 def test_verify_fix_b_to_c_resolved(test_db):
-    """Verify B to C with baseline A returns 'resolved' and updates findings to verified_fixed."""
-    # Seed demo dataset (versions A, B, C)
+    """Verify B (regression) to C (fix) from orderbot scenario returns 'resolved' and updates finding."""
+    # Seed benchmark dataset: version A (baseline), version B (fails), version C (fix)
     seed_demo(test_db)
 
-    # First diagnose B against A so finding is created with status 'open'
+    # 1. Run diagnosis on candidate B against baseline A
     diag = find_suspects(test_db, "orderbot", "A", "B", min_runs=10, save=True)
     assert diag["status"] == "diagnosed"
 
-    finding_before = test_db["findings"].find_one({"projectId": "orderbot", "versionId": "B"})
-    assert finding_before is not None
-    assert finding_before["status"] == "open"
+    # Verify finding exists with status 'open'
+    initial_finding = test_db["findings"].find_one({
+        "projectId": "orderbot",
+        "versionId": "B",
+        "suspectedComponent": "tools",
+    })
+    assert initial_finding is not None
+    assert initial_finding["status"] == "open"
 
-    # Verify fix from B to C
-    res = verify_fix(test_db, "orderbot", "B", "C", baseline_version_id="A", min_runs=10)
+    # 2. Verify fix from B to C using fix_version_id parameter
+    res = verify_fix(
+        test_db,
+        project_id="orderbot",
+        bad_version_id="B",
+        fix_version_id="C",
+        baseline_version_id="A",
+        min_runs=10,
+    )
+
+    # Assert verdict is 'resolved'
     assert res["result"] == "resolved"
     assert res["metrics"]["fingerprintDropRatio"] >= 0.80
 
-    # Finding status should be updated to verified_fixed
-    finding_after = test_db["findings"].find_one({"projectId": "orderbot", "versionId": "B"})
-    assert finding_after["status"] == "verified_fixed"
+    # 3. Assert database update in findings collection
+    updated_finding = test_db["findings"].find_one({
+        "projectId": "orderbot",
+        "versionId": "B",
+        "suspectedComponent": "tools",
+    })
+    assert updated_finding is not None
+    assert updated_finding["status"] == "verified_fixed"
 
 
 def test_verify_fix_b_to_b_remains(test_db):
-    """Verify B to B returns 'remains' and updates findings to still_failing."""
+    """Verify comparing B against itself returns 'remains' and updates finding to still_failing."""
     seed_demo(test_db)
 
-    # First diagnose B against A
+    # Create finding for version B
     find_suspects(test_db, "orderbot", "A", "B", min_runs=10, save=True)
 
-    # Verifying B against itself: 0% improvement, 0% error drop
-    res = verify_fix(test_db, "orderbot", "B", "B", baseline_version_id="A", min_runs=10)
-    assert res["result"] == "remains"
+    # Verify B against B: no improvement, error fingerprints do not drop
+    res = verify_fix(
+        test_db,
+        project_id="orderbot",
+        bad_version_id="B",
+        fix_version_id="B",
+        baseline_version_id="A",
+        min_runs=10,
+    )
 
-    finding = test_db["findings"].find_one({"projectId": "orderbot", "versionId": "B"})
+    assert res["result"] == "remains"
+    assert res["newStatus"] == "still_failing"
+
+    finding = test_db["findings"].find_one({
+        "projectId": "orderbot",
+        "versionId": "B",
+        "suspectedComponent": "tools",
+    })
+    assert finding is not None
     assert finding["status"] == "still_failing"
 
 
-def test_verify_fix_insufficient_runs_inconclusive(test_db):
-    """Verify fixed version with fewer than min_runs runs returns 'inconclusive'."""
+def test_verify_fix_gatekeeper_insufficient_runs(test_db):
+    """Verify gatekeeper: if either version has < min_runs runs, returns inconclusive (reason: insufficient runs)."""
     seed_demo(test_db)
 
-    res = verify_fix(test_db, "orderbot", "B", "C", baseline_version_id="A", min_runs=100)
+    # Requiring min_runs=100 when each version has 60 runs
+    res = verify_fix(
+        test_db,
+        project_id="orderbot",
+        bad_version_id="B",
+        fix_version_id="C",
+        baseline_version_id="A",
+        min_runs=100,
+    )
+
     assert res["result"] == "inconclusive"
+    assert "insufficient runs" in res["reason"].lower()
+
+
+def test_verify_fix_without_baseline_resolved(test_db):
+    """Verify that when no baseline is provided, fix pass rate >= 0.30 above bad version resolves."""
+    seed_demo(test_db)
+
+    # Without baseline_version_id (checks improvement >= 0.30)
+    res = verify_fix(
+        test_db,
+        project_id="orderbot",
+        bad_version_id="B",
+        fix_version_id="C",
+        baseline_version_id=None,
+        min_runs=10,
+    )
+
+    assert res["result"] == "resolved"
+    assert res["metrics"]["improvement"] >= 0.30
+    assert res["metrics"]["fingerprintDropRatio"] >= 0.80
