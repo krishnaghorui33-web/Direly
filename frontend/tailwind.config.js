@@ -8,35 +8,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: {
-          app: 'var(--bg-app)',
-          nav: 'var(--bg-nav)',
-          card: 'var(--bg-card)',
-          hover: 'var(--bg-hover)',
-          input: 'var(--bg-input)',
-        },
-        border: {
-          DEFAULT: 'var(--border-default)',
-          subtle: 'var(--border-subtle)',
-          focus: 'var(--border-focus)',
-        },
-        accent: {
-          teal: 'var(--accent-teal)',
-          'teal-hover': 'var(--accent-teal-hover)',
-          'teal-soft': 'var(--accent-teal-soft)',
-          cyan: 'var(--accent-cyan)',
-        },
-        txt: {
-          primary: 'var(--text-primary)',
-          secondary: 'var(--text-secondary)',
-          muted: 'var(--text-muted)',
-          disabled: 'var(--text-disabled)',
-        },
-        status: {
-          success: 'var(--status-success)',
-          warning: 'var(--status-warning)',
-          error: 'var(--status-error)',
-          info: 'var(--status-info)',
+        direly: {
+          bg: '#090c13',
+          surface: '#0f1420',
+          card: '#0e1422',
+          border: '#1e2638',
+          hover: '#141d2f',
+          purple: {
+            DEFAULT: '#7c3aed',
+            light: '#9061f9',
+            dark: '#6d28d9',
+          },
+          cyan: '#06b6d4',
+          emerald: '#10b981',
+          amber: '#f59e0b',
+          rose: '#f43f5e',
+          slate: '#94a3b8',
         }
       },
       fontFamily: {

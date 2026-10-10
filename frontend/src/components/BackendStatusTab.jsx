@@ -33,32 +33,32 @@ export default function BackendStatusTab({ isLiveApi, onToggleApiMode }) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-extrabold text-txt-primary">Backend & Database Architecture</h2>
-        <p className="text-sm text-txt-secondary mt-1">
+        <h2 className="text-2xl font-extrabold text-white">Backend & Database Architecture</h2>
+        <p className="text-sm text-slate-400 mt-1">
           Review 2 technical verification area: FastAPI REST API integration and MongoDB Atlas data layer.
         </p>
       </div>
 
       {/* Connection Controller Card */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 sm:p-6 space-y-4 shadow-sm transition-colors">
+      <div className="bg-[#0f1422] border border-[#1e2638] rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className={`p-3 rounded-xl border ${
               isLiveApi 
-                ? 'bg-accent-teal-soft border-accent-teal/50 text-status-success' 
-                : 'bg-accent-teal-soft border-accent-teal/50 text-accent-teal'
+                ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-400' 
+                : 'bg-purple-950/60 border-purple-500/50 text-purple-400'
             }`}>
               <Server className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
-                <h3 className="text-sm sm:text-base font-bold text-txt-primary">FastAPI Base URL:</h3>
-                <code className="text-xs sm:text-sm font-mono text-accent-cyan px-2.5 py-1 bg-bg-input rounded-lg border border-border">
+                <h3 className="text-sm sm:text-base font-bold text-white">FastAPI Base URL:</h3>
+                <code className="text-xs sm:text-sm font-mono text-purple-300 px-2.5 py-1 bg-black/40 rounded-lg border border-[#222e44]">
                   http://localhost:8000
                 </code>
               </div>
-              <p className="text-xs sm:text-sm text-txt-secondary mt-1">
-                Current active mode: <strong className="text-txt-primary font-bold">{isLiveApi ? 'Live Backend API' : 'Sandbox Demonstration Mode'}</strong>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Current active mode: <strong className="text-white font-bold">{isLiveApi ? 'Live Backend API' : 'Sandbox Demonstration Mode'}</strong>
               </p>
             </div>
           </div>
@@ -67,9 +67,9 @@ export default function BackendStatusTab({ isLiveApi, onToggleApiMode }) {
             <button
               onClick={handleTestConnection}
               disabled={testing}
-              className="px-4 py-2.5 bg-bg-card hover:bg-bg-hover border border-border text-txt-primary rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
+              className="px-4 py-2.5 bg-[#172033] hover:bg-[#202c44] border border-[#263554] text-slate-200 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={`w-4 h-4 ${testing ? 'animate-spin text-accent-teal' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${testing ? 'animate-spin text-purple-400' : ''}`} />
               <span>Ping Backend</span>
             </button>
 
@@ -77,8 +77,8 @@ export default function BackendStatusTab({ isLiveApi, onToggleApiMode }) {
               onClick={onToggleApiMode}
               className={`px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold border transition-all ${
                 isLiveApi
-                  ? 'bg-status-success border-status-success text-white dark:text-[#0B1117]'
-                  : 'bg-accent-teal hover:bg-accent-teal-hover border-border-focus text-white dark:text-[#0B1117]'
+                  ? 'bg-emerald-600 border-emerald-500 text-white'
+                  : 'bg-purple-600 hover:bg-purple-500 border-purple-500 text-white'
               }`}
             >
               {isLiveApi ? 'Switch to Sandbox' : 'Connect Live FastAPI'}
@@ -87,55 +87,55 @@ export default function BackendStatusTab({ isLiveApi, onToggleApiMode }) {
         </div>
 
         {pingResult && (
-          <div className="p-3.5 bg-bg-input rounded-lg border border-border text-xs sm:text-sm font-mono text-accent-cyan">
+          <div className="p-3.5 bg-[#0a0d14] rounded-lg border border-[#1e2638] text-xs sm:text-sm font-mono text-slate-300">
             {pingResult}
           </div>
         )}
       </div>
 
       {/* MongoDB Data Model */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 sm:p-6 space-y-4 shadow-sm transition-colors">
+      <div className="bg-[#0f1422] border border-[#1e2638] rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <Database className="w-5 h-5 text-accent-teal" />
-          <h3 className="text-base sm:text-lg font-bold text-txt-primary">
-            MongoDB Atlas Architecture (Database: <code className="text-status-success font-mono">direly</code>)
+          <Database className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-base sm:text-lg font-bold text-white">
+            MongoDB Atlas Architecture (Database: <code className="text-emerald-400 font-mono">direly</code>)
           </h3>
         </div>
-        <p className="text-xs sm:text-sm text-txt-secondary">
-          The backend runs deterministic aggregation pipelines and strict <code className="text-accent-cyan font-mono">$jsonSchema</code> validators across 5 primary collections:
+        <p className="text-xs sm:text-sm text-slate-400">
+          The backend runs deterministic aggregation pipelines and strict <code className="text-slate-300 font-mono">$jsonSchema</code> validators across 5 primary collections:
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
           {collections.map((c) => (
-            <div key={c.name} className="p-4 bg-bg-input rounded-xl border border-border space-y-1.5 shadow-sm">
+            <div key={c.name} className="p-4 bg-[#0a0d14] rounded-xl border border-[#1a2336] space-y-1.5 shadow-sm">
               <div className="flex items-center justify-between text-sm font-mono">
-                <span className="font-bold text-accent-cyan">{c.name}</span>
-                <span className="text-xs text-txt-muted">{c.count}</span>
+                <span className="font-bold text-purple-300">{c.name}</span>
+                <span className="text-xs text-slate-500">{c.count}</span>
               </div>
-              <p className="text-xs sm:text-sm text-txt-secondary leading-relaxed">{c.desc}</p>
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">{c.desc}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* API Endpoints Contract */}
-      <div className="bg-bg-card border border-border rounded-xl p-5 sm:p-6 space-y-4 shadow-sm transition-colors">
+      <div className="bg-[#0f1422] border border-[#1e2638] rounded-xl p-5 sm:p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <Layers className="w-5 h-5 text-accent-teal" />
-          <h3 className="text-base sm:text-lg font-bold text-txt-primary">Agreed Team REST Endpoints</h3>
+          <Layers className="w-5 h-5 text-purple-400" />
+          <h3 className="text-base sm:text-lg font-bold text-white">Agreed Team REST Endpoints</h3>
         </div>
         <div className="space-y-2.5">
           {endpoints.map((ep) => (
-            <div key={ep.path} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-bg-input border border-border text-sm gap-2">
+            <div key={ep.path} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-[#0a0d14] border border-[#1a2336] text-sm gap-2">
               <div className="flex items-center gap-2.5 font-mono">
                 <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${
-                  ep.method === 'POST' ? 'bg-accent-teal-soft text-accent-teal border border-accent-teal/40' : 'bg-bg-card text-accent-cyan border border-border'
+                  ep.method === 'POST' ? 'bg-purple-950 text-purple-300 border border-purple-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                 }`}>
                   {ep.method}
                 </span>
-                <span className="text-txt-primary font-bold">{ep.path}</span>
+                <span className="text-slate-200 font-bold">{ep.path}</span>
               </div>
-              <span className="text-xs sm:text-sm text-txt-secondary">{ep.desc}</span>
+              <span className="text-xs sm:text-sm text-slate-400">{ep.desc}</span>
             </div>
           ))}
         </div>

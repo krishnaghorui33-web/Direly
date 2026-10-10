@@ -18,9 +18,6 @@ import {
 } from './services/api';
 
 export default function App() {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('direly_theme') || 'dark';
-  });
   const [activeSection, setActiveSection] = useState('overview');
   const [data, setData] = useState(DEMO_DATA);
   const [isLiveApi, setIsLiveApi] = useState(false);
@@ -31,27 +28,10 @@ export default function App() {
   const [isTraceModalOpen, setIsTraceModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Apply theme to document
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === 'light') {
-      root.classList.add('light');
-      root.classList.remove('dark');
-    } else {
-      root.classList.add('dark');
-      root.classList.remove('light');
-    }
-    localStorage.setItem('direly_theme', theme);
-  }, [theme]);
-
   // Load data on mount
   useEffect(() => {
     loadData();
   }, [isLiveApi]);
-
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
 
   const handleExportReport = () => {
     const summary = `DIRELY EVALUATION REPORT
@@ -104,15 +84,13 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
   };
 
   return (
-    <div className="min-h-screen bg-bg-app text-txt-primary flex flex-col font-sans transition-colors duration-200">
+    <div className="min-h-screen bg-[#090c13] text-slate-100 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <Header
         onRefresh={loadData}
         onReplay={() => handleReplay({ target: 'full_eval' })}
         isRefreshing={isRefreshing}
         isReplaying={isReplaying}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onExportReport={handleExportReport}
       />
 
@@ -147,7 +125,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
                 <div className="pt-6 flex justify-end">
                   <button
                     onClick={() => setActiveSection('failures')}
-                    className="px-5 py-3 bg-accent-teal hover:bg-accent-teal-hover active:opacity-90 text-white dark:text-[#0B1117] rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-sm transition-all"
+                    className="px-5 py-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-md shadow-purple-950/40 transition-all"
                   >
                     <span>Step 2: Inspect Failure Patterns</span>
                     <ArrowRight className="w-4 h-4" />
@@ -171,7 +149,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
                 <div className="pt-6 flex items-center justify-between">
                   <button
                     onClick={() => setActiveSection('overview')}
-                    className="px-5 py-2.5 bg-bg-card hover:bg-bg-hover border border-border text-txt-secondary hover:text-txt-primary rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                    className="px-5 py-2.5 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 hover:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back to Overview</span>
@@ -179,7 +157,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
 
                   <button
                     onClick={() => setActiveSection('diagnosis')}
-                    className="px-5 py-3 bg-accent-teal hover:bg-accent-teal-hover active:opacity-90 text-white dark:text-[#0B1117] rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-sm transition-all"
+                    className="px-5 py-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-md shadow-purple-950/40 transition-all"
                   >
                     <span>Step 3: See Likely Culprit</span>
                     <ArrowRight className="w-4 h-4" />
@@ -205,7 +183,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
                 <div className="pt-6 flex items-center justify-between">
                   <button
                     onClick={() => setActiveSection('failures')}
-                    className="px-5 py-2.5 bg-bg-card hover:bg-bg-hover border border-border text-txt-secondary hover:text-txt-primary rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                    className="px-5 py-2.5 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 hover:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back to Failure Patterns</span>
@@ -213,7 +191,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
 
                   <button
                     onClick={() => setActiveSection('verification')}
-                    className="px-5 py-3 bg-accent-teal hover:bg-accent-teal-hover active:opacity-90 text-white dark:text-[#0B1117] rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-sm transition-all"
+                    className="px-5 py-3 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-xl text-sm font-bold flex items-center gap-2.5 shadow-md shadow-purple-950/40 transition-all"
                   >
                     <span>Step 4: Verify Fix with Replay</span>
                     <ArrowRight className="w-4 h-4" />
@@ -235,7 +213,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
                 <div className="pt-6 flex items-center justify-between">
                   <button
                     onClick={() => setActiveSection('diagnosis')}
-                    className="px-5 py-2.5 bg-bg-card hover:bg-bg-hover border border-border text-txt-secondary hover:text-txt-primary rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                    className="px-5 py-2.5 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 hover:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back to Diagnosis</span>
@@ -243,7 +221,7 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
 
                   <button
                     onClick={() => setActiveSection('backend')}
-                    className="px-5 py-2.5 bg-bg-card hover:bg-bg-hover border border-border text-txt-secondary hover:text-txt-primary rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                    className="px-5 py-2.5 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 hover:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
                   >
                     <span>Step 5: View System Architecture</span>
                     <ArrowRight className="w-4 h-4" />
@@ -275,8 +253,8 @@ Fix Status: ${data.fixVerification?.patch?.passRate} Pass (100% Recovered)`;
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-bg-card border border-accent-teal rounded-xl shadow-xl flex items-center gap-3 text-sm text-txt-primary animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 text-status-success shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 bg-[#0e1422] border border-purple-500 rounded-xl shadow-xl flex items-center gap-3 text-sm text-slate-200 animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
