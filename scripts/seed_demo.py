@@ -1,312 +1,223 @@
-"""Seed demo dataset for OrderBot benchmark across versions A, B, and C."""
+"""Seed the OrderBot demo dataset into MongoDB.
 
-from datetime import datetime, timezone, timedelta
-import hashlib
+Unlike the earlier version of this script, nothing here decides an outcome. The
+project, the three version manifests, the runs and the events are all produced
+by actually executing the agent in agent/ and runner/: the version B regression
+exists because the agent code sends "order_id" while the B schema requires
+"orderId", and every run's status is whatever the agent did.
+
+The script then hands the stored data to the analysis engine, so the demo shows
+the diagnosis being computed from evidence rather than asserted by the seeder.
+
+Public API is load-bearing and must not change: tests/test_culprit.py,
+tests/test_compare.py, tests/test_stats.py and tests/test_verify.py all import
+build_manifest_components and call seed_demo(db).
+"""
+
+from datetime import datetime, timedelta, timezone
 import os
-import random
 import sys
-import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-# Ensure repository root is in python path
+# Ensure repository root is on the python path, matching the existing convention.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pymongo.database import Database
 
-from backend.app.db import get_db, setup_db
+from agent.manifests import build_manifest_components
 from backend.app.analysis.compare import compute_manifest_hashes
-from backend.app.analysis.event_store import insert_events_safe
 from backend.app.analysis.culprit import find_suspects
+from backend.app.analysis.event_store import insert_events_safe
 from backend.app.analysis.verify import verify_fix
+from backend.app.db import get_db, setup_db
+from runner.harness import execute_version, summarize
+
+PROJECT_ID = "orderbot"
+VERSION_IDS = ["A", "B", "C"]
+SUITE_VERSION = "1.0.0"
+
+# Versions are spaced a day apart so find_suspects can order them by createdAt
+# and award full timing credit when A is compared against B.
+VERSION_BASE_TIME = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+RUN_BASE_TIME = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+
+# The dependency map is a real claim about the agent, not decoration: refund_order
+# is only reached through get_order. blast_radius reads it.
+DEPENDENCY_MAP = {
+    "get_order": ["refund_order", "order_tracking_workflow"],
+}
 
 
-def build_manifest_components(version_id: str) -> Dict[str, Any]:
-    """Build components dictionary for version A, B, or C."""
-    prompt = "You are an AI order processing agent. Help users check order statuses, process refunds, and search return policies."
-    model = {"name": "gpt-4o", "temperature": 0.0}
-    retrieval = {"index": "order_policies_v1", "topK": 3}
-    code = {"commit": "c0ffee11" if version_id != "C" else "c0ffee22_fix_orderId"}
+def build_manifest_components_for(version_id: str) -> Dict[str, Any]:
+    """Return the stored manifest components for a version.
 
-    tool_refund = {
-        "name": "refund_order",
-        "description": "Process refund for order_id",
-        "parameters": {
-            "type": "object",
-            "properties": {"order_id": {"type": "string", "description": "Order ID"}},
-            "required": ["order_id"],
-        },
-    }
-    tool_search = {
-        "name": "search_policy",
-        "description": "Search return policies",
-        "parameters": {
-            "type": "object",
-            "properties": {"query": {"type": "string", "description": "Search keywords"}},
-            "required": ["query"],
-        },
-    }
+    Thin wrapper kept so the seeder has one obvious place to reach the agent's
+    manifests. Equivalent to agent.manifests.build_manifest_components.
 
-    if version_id == "A":
-        tool_get_order = {
-            "name": "get_order",
-            "description": "Retrieve order details by order_id",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "order_id": {"type": "string", "description": "The unique order identifier"}
-                },
-                "required": ["order_id"],
-            },
-        }
-    else:
-        # B and C use parameter rename to 'orderId'
-        tool_get_order = {
-            "name": "get_order",
-            "description": "Retrieve order details by orderId",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "orderId": {"type": "string", "description": "The unique order identifier"}
-                },
-                "required": ["orderId"],
-            },
-        }
+    Args:
+        version_id (str): One of "A", "B", "C".
 
-    return {
-        "prompt": prompt,
-        "tools": [tool_get_order, tool_refund, tool_search],
-        "model": model,
-        "retrieval": retrieval,
-        "code": code,
-    }
+    Returns:
+        Dict[str, Any]: The components dict.
+    """
+    return build_manifest_components(version_id)
+
+
+def _ingest(db: Database, events: List[Dict[str, Any]], label: str) -> int:
+    """Ingest events and fail loudly if any were rejected.
+
+    insert_events_safe returns rejected documents in a list rather than raising.
+    Ignoring that list is how a demo ends up with a third of its regression
+    evidence silently missing while every test still reports green: the schema
+    validator rejecting a document reduces the evidence count, the score stays
+    above the confidence threshold, and nothing surfaces the loss. So this
+    raises instead.
+
+    Args:
+        db (Database): Target database.
+        events (List[Dict[str, Any]]): Event documents to ingest.
+        label (str): Description used in the error message.
+
+    Returns:
+        int: Number of newly inserted events.
+
+    Raises:
+        RuntimeError: If MongoDB rejected or deduplicated anything unexpectedly.
+    """
+    result = insert_events_safe(db, events)
+
+    if result["rejected"]:
+        detail = "; ".join(f"[{r['index']}] {r['reason']}" for r in result["rejected"][:5])
+        raise RuntimeError(f"{label}: {len(result['rejected'])} event(s) rejected by MongoDB: {detail}")
+
+    if result["duplicates"]:
+        raise RuntimeError(
+            f"{label}: {result['duplicates']} duplicate event(s). The demo project should have "
+            "been cleared before seeding."
+        )
+
+    return result["inserted"]
 
 
 def seed_demo(db: Optional[Database] = None, run_analysis: bool = True) -> Dict[str, Any]:
-    """Seed benchmark project 'orderbot' with versions A, B, and C (60 runs each).
+    """Seed the orderbot benchmark by executing the agent across versions A, B and C.
 
     Args:
-        db (Optional[Database]): PyMongo Database instance. Defaults to get_db().
-        run_analysis (bool): Whether to run find_suspects and verify_fix at the end.
+        db (Optional[Database]): Target database. Defaults to the configured DB_NAME.
+        run_analysis (bool): Whether to run find_suspects and verify_fix afterwards.
+            Defaults to True, which the test suite depends on: test_verify.py
+            requires a finding to already exist before verify_fix runs.
 
     Returns:
-        Dict[str, Any]: Summary of seeded versions, runs, events, and analysis results.
+        Dict[str, Any]: Summary with per-version stats, totals, and the analysis
+            results when run_analysis is True.
     """
     database = db if db is not None else get_db()
-
-    # 1. Database Connection & Warning
     print(f"Target database: {database.name}")
-    print("WARNING: Clearing existing 'orderbot' data in 3 seconds. Press Ctrl+C to abort...")
-    time.sleep(3)
 
-    # Apply idempotent schema validators and indexes
     setup_db(database)
 
-    # 2. Data Clearing
-    project_id = "orderbot"
-    print("Clearing existing 'orderbot' data...")
-    database["projects"].delete_many({"_id": project_id})
-    database["versions"].delete_many({"projectId": project_id})
-    database["runs"].delete_many({"projectId": project_id})
-    database["events"].delete_many({"projectId": project_id})
-    database["findings"].delete_many({"projectId": project_id})
+    # Clear prior state for this project. version_stats is included because
+    # stats.success_rate_by_version $merges into it; leaving stale rows would let
+    # an older run's pass rates leak into a later analysis.
+    for collection in ("projects", "versions", "runs", "events", "findings", "version_stats"):
+        database[collection].delete_many({"projectId": PROJECT_ID})
 
-    # 3. Insert project
-    project_doc = {
-        "_id": project_id,
-        "name": "OrderBot",
-        "createdAt": datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
-        "dependencyMap": {
-            "get_order": ["refund_order", "order_tracking_workflow"],
-        },
-    }
-    database["projects"].insert_one(project_doc)
-
-    # 4. Insert versions A, B, C
-    base_time = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
-    version_ids = ["A", "B", "C"]
-
-    for idx, v_id in enumerate(version_ids):
-        components = build_manifest_components(v_id)
-        manifest_meta = compute_manifest_hashes(components)
-        v_doc = {
-            "_id": v_id,
-            "projectId": project_id,
-            "label": f"Release {v_id}",
-            "createdAt": base_time + timedelta(days=idx),
-            "components": components,
-            "hashes": manifest_meta["hashes"],
-            "manifestHash": manifest_meta["manifestHash"],
+    database["projects"].insert_one(
+        {
+            "_id": PROJECT_ID,
+            "name": "OrderBot",
+            "createdAt": VERSION_BASE_TIME,
+            "dependencyMap": DEPENDENCY_MAP,
         }
-        database["versions"].insert_one(v_doc)
+    )
 
-    # 5. Populate Scenario: 20 cases (c01 - c20) x 3 attempts = 60 runs per version
-    cases = [f"c{i:02d}" for i in range(1, 21)]
-    order_cases = set(cases[:12])  # c01 to c12 exercise get_order
+    # Insert the three version manifests.
+    for index, version_id in enumerate(VERSION_IDS):
+        components = build_manifest_components_for(version_id)
+        hashes = compute_manifest_hashes(components)
+        database["versions"].insert_one(
+            {
+                "_id": version_id,
+                "projectId": PROJECT_ID,
+                "label": f"Release {version_id}",
+                "createdAt": VERSION_BASE_TIME + timedelta(days=index),
+                "components": components,
+                "hashes": hashes["hashes"],
+                "manifestHash": hashes["manifestHash"],
+            }
+        )
 
-    rng = random.Random(42)
-    total_runs_created = 0
-    total_events_created = 0
+    # Execute the agent for every version and store what actually happened.
+    per_version: Dict[str, Any] = {}
+    total_runs = 0
+    total_events = 0
 
-    for v_id in version_ids:
-        v_runs = []
-        v_events = []
+    for version_id in VERSION_IDS:
+        executed = execute_version(version_id, PROJECT_ID, RUN_BASE_TIME)
+        database["runs"].insert_many(executed.runs)
+        total_runs += len(executed.runs)
 
-        for case_id in cases:
-            for attempt in [1, 2, 3]:
-                run_id = f"run_{project_id}_{v_id}_{case_id}_att{attempt}"
-                run_start = base_time + timedelta(hours=attempt, minutes=int(case_id[1:]))
+        inserted = _ingest(database, executed.events, f"version {version_id}")
+        total_events += inserted
 
-                status = "pass"
-                failed_checks = []
-                error_msg = None
-                error_tool = None
-                error_pattern = None
+        stats = summarize(executed)
+        per_version[version_id] = stats
+        print(
+            f"  version {version_id}: {stats['runs']} runs, {stats['passes']} pass, "
+            f"{stats['failures']} fail (pass rate {stats['passRate']:.2%})"
+        )
 
-                if v_id == "A":
-                    # Flaky case c03: fails attempt 1, passes attempts 2/3
-                    if case_id == "c03" and attempt == 1:
-                        status = "fail"
-                        failed_checks = ["timeout"]
-                        error_msg = "Gateway timed out during policy retrieval"
-                        error_pattern = "timeout"
-                    # Incidental timeout on c15 attempt 2
-                    elif case_id == "c15" and attempt == 2:
-                        status = "fail"
-                        failed_checks = ["timeout"]
-                        error_msg = "Model request timed out after 30000ms"
-                        error_pattern = "timeout"
-                elif v_id == "B":
-                    # Regression: c01 to c12 fail every attempt
-                    if case_id in order_cases:
-                        status = "fail"
-                        failed_checks = ["invalid_tool_args"]
-                        tx_hash = hashlib.sha1(f"{case_id}_{attempt}_{rng.randint(1000, 9999)}".encode()).hexdigest()[:16]
-                        digits = rng.randint(100, 999)
-                        error_msg = f"missing required argument: orderId in txn {tx_hash} (code {digits})"
-                        error_tool = "get_order"
-                        error_pattern = "invalid_tool_args"
-                    # Remaining 8 cases (c13-c20) pass
-                elif v_id == "C":
-                    # Fix: all pass
-                    status = "pass"
+    diagnosis = None
+    verification = None
 
-                run_doc = {
-                    "_id": run_id,
-                    "projectId": project_id,
-                    "versionId": v_id,
-                    "caseId": case_id,
-                    "suiteVersion": "1.0.0",
-                    "attempt": attempt,
-                    "status": status,
-                    "failedChecks": failed_checks,
-                    "latencyMs": rng.randint(150, 450) if status == "pass" else rng.randint(600, 1500),
-                    "startedAt": run_start,
-                }
-                v_runs.append(run_doc)
-
-                # Events for run
-                # seq 1: user_input
-                v_events.append({
-                    "runId": run_id,
-                    "projectId": project_id,
-                    "versionId": v_id,
-                    "seq": 1,
-                    "type": "user_input",
-                    "ts": run_start,
-                    "payload": {"text": f"Process order inquiry for case {case_id}"},
-                })
-
-                # seq 2: tool_call
-                called_tool = "get_order" if case_id in order_cases else "search_policy"
-                call_args = {"order_id": f"ord_{case_id}"} if v_id in ("A", "B") else {"orderId": f"ord_{case_id}"}
-                v_events.append({
-                    "runId": run_id,
-                    "projectId": project_id,
-                    "versionId": v_id,
-                    "seq": 2,
-                    "type": "tool_call",
-                    "ts": run_start + timedelta(milliseconds=100),
-                    "payload": {"tool": called_tool, "args": call_args},
-                })
-
-                # seq 3: tool_result or error
-                if status == "pass":
-                    v_events.append({
-                        "runId": run_id,
-                        "projectId": project_id,
-                        "versionId": v_id,
-                        "seq": 3,
-                        "type": "tool_result",
-                        "ts": run_start + timedelta(milliseconds=200),
-                        "payload": {"tool": called_tool, "status": "success", "result": {"id": f"ord_{case_id}", "status": "shipped"}},
-                    })
-                else:
-                    v_events.append({
-                        "runId": run_id,
-                        "projectId": project_id,
-                        "versionId": v_id,
-                        "seq": 3,
-                        "type": "error",
-                        "ts": run_start + timedelta(milliseconds=200),
-                        "payload": {
-                            "tool": error_tool,
-                            "message": error_msg,
-                            "errorType": error_pattern,
-                        },
-                    })
-
-                # seq 4: output
-                v_events.append({
-                    "runId": run_id,
-                    "projectId": project_id,
-                    "versionId": v_id,
-                    "seq": 4,
-                    "type": "output",
-                    "ts": run_start + timedelta(milliseconds=300),
-                    "payload": {"text": "Finished response" if status == "pass" else "Execution failed with error"},
-                })
-
-        # Save runs
-        database["runs"].insert_many(v_runs)
-        total_runs_created += len(v_runs)
-
-        # Ingest events safely through insert_events_safe
-        ingest_res = insert_events_safe(database, v_events)
-        total_events_created += ingest_res["inserted"]
-
-    diagnosis_result = None
-    verification_result = None
-
-    # 5. Integration: execute find_suspects(A, B) and verify_fix(B, C) to populate findings
     if run_analysis:
-        print("Running find_suspects('A', 'B')...")
-        diagnosis_result = find_suspects(database, project_id, "A", "B", min_runs=10, save=True)
-        top_susp = diagnosis_result["suspects"][0] if diagnosis_result.get("suspects") else None
-        if top_susp:
-            print(f"Top Suspect: {top_susp['component']} (confidence: {top_susp['confidence']}, score: {top_susp['score']})")
+        print("\nRunning find_suspects('A', 'B')...")
+        diagnosis = find_suspects(database, PROJECT_ID, "A", "B", min_runs=10, save=True)
+        suspects = diagnosis.get("suspects") or []
+        if suspects:
+            top = suspects[0]
+            print(
+                f"  top suspect: {top['component']} "
+                f"(confidence {top['confidence']}, score {top['score']}, "
+                f"{top['matchingFailedRuns']}/{top['totalFailedRuns']} failed runs explained)"
+            )
+            print(f"  reason: {top['reason']}")
+        for note in diagnosis.get("uncertainty", []):
+            print(f"  uncertainty: {note}")
 
-        print("Running verify_fix('B', 'C', baseline='A')...")
-        verification_result = verify_fix(
+        print("\nRunning verify_fix('B', 'C', baseline='A')...")
+        verification = verify_fix(
             database,
-            project_id,
+            PROJECT_ID,
             bad_version_id="B",
             fix_version_id="C",
             baseline_version_id="A",
             min_runs=10,
         )
-        print(f"Verification Result: {verification_result['result']} (status: {verification_result['newStatus']})")
+        print(f"  verdict: {verification['result']} -> findings marked {verification['newStatus']}")
+        print(f"  reason: {verification['reason']}")
 
     return {
         "status": "success",
-        "projectId": project_id,
-        "versions": version_ids,
-        "totalRuns": total_runs_created,
-        "totalEvents": total_events_created,
-        "diagnosis": diagnosis_result,
-        "verification": verification_result,
+        "projectId": PROJECT_ID,
+        "versions": VERSION_IDS,
+        "perVersion": per_version,
+        "totalRuns": total_runs,
+        "totalEvents": total_events,
+        "diagnosis": diagnosis,
+        "verification": verification,
     }
 
 
 if __name__ == "__main__":
+    print(
+        "Seeding will clear existing 'orderbot' data in the target database.\n"
+        "Ctrl+C now to abort."
+    )
+    import time
+
+    time.sleep(3)
+
     result = seed_demo()
-    print(f"\nSeeding complete: {result['totalRuns']} runs and {result['totalEvents']} events inserted.")
+    print(f"\nSeeding complete: {result['totalRuns']} runs, {result['totalEvents']} events.")
