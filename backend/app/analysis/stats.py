@@ -206,3 +206,77 @@ def failure_counts_by_fingerprint(
     ]
 
     return list(db["events"].aggregate(pipeline))
+
+
+def detect_change_points(db: Database, project_id: str) -> List[Dict[str, Any]]:
+    """Detect regression change-points across versions using MongoDB $setWindowFields.
+
+    Queries the materialized `version_stats` collection, looks up version createdAt for
+    accurate temporal ordering, computes previous pass rate using $shift, and calculates
+    passRateDrop to identify versions with drops >= 0.10.
+
+    Args:
+        db (Database): PyMongo Database instance.
+        project_id (str): Identifier of target project.
+
+    Returns:
+        List[Dict[str, Any]]: List of change point documents with:
+            {versionId, runs, passes, failures, passRate, prevPassRate, passRateDrop}.
+    """
+    pipeline = [
+        {"$match": {"projectId": project_id}},
+        {
+            "$lookup": {
+                "from": "versions",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "verDoc",
+            }
+        },
+        {"$unwind": {"path": "$verDoc", "preserveNullAndEmptyArrays": True}},
+        {
+            "$setWindowFields": {
+                "partitionBy": "$projectId",
+                "sortBy": {"verDoc.createdAt": 1, "_id": 1},
+                "output": {
+                    "prevPassRate": {
+                        "$shift": {
+                            "output": "$passRate",
+                            "by": -1,
+                            "default": 1.0,
+                        }
+                    }
+                },
+            }
+        },
+        {
+            "$addFields": {
+                "passRateDrop": {
+                    "$round": [
+                        {"$subtract": ["$prevPassRate", "$passRate"]},
+                        4,
+                    ]
+                }
+            }
+        },
+        {
+            "$match": {
+                "passRateDrop": {"$gte": 0.10}
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "versionId": "$_id",
+                "runs": 1,
+                "passes": 1,
+                "failures": 1,
+                "passRate": 1,
+                "prevPassRate": 1,
+                "passRateDrop": 1,
+            }
+        },
+    ]
+
+    return list(db["version_stats"].aggregate(pipeline))
+

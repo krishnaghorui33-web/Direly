@@ -154,3 +154,78 @@ def test_failure_counts_by_fingerprint_pipeline(test_db):
     # 3. With nonexistent version_id
     counts_none = failure_counts_by_fingerprint(test_db, proj, version_id="NONEXISTENT")
     assert len(counts_none) == 0
+
+
+def test_detect_change_points_with_window_fields(test_db):
+    """Verify detect_change_points identifies versions where passRate drop >= 0.10."""
+    proj = "change_point_proj"
+    t0 = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+
+    # Insert versions A (good), B (regressed), C (fixed)
+    for idx, v_id in enumerate(["A", "B", "C"]):
+        comp = build_manifest_components(v_id)
+        meta = compute_manifest_hashes(comp)
+        test_db["versions"].insert_one({
+            "_id": v_id,
+            "projectId": proj,
+            "label": f"Release {v_id}",
+            "createdAt": t0 + timedelta(days=idx),
+            "components": comp,
+            "hashes": meta["hashes"],
+            "manifestHash": meta["manifestHash"],
+        })
+
+    # A: 10 runs, 10 passes -> passRate = 1.0
+    for i in range(10):
+        test_db["runs"].insert_one({
+            "_id": f"run_cp_a_{i}",
+            "projectId": proj,
+            "versionId": "A",
+            "caseId": f"c{i}",
+            "attempt": 1,
+            "status": "pass",
+            "latencyMs": 100,
+            "startedAt": t0 + timedelta(minutes=i),
+        })
+
+    # B: 10 runs, 4 passes -> passRate = 0.4 (drop from A: 1.0 - 0.4 = 0.6 >= 0.10)
+    for i in range(10):
+        test_db["runs"].insert_one({
+            "_id": f"run_cp_b_{i}",
+            "projectId": proj,
+            "versionId": "B",
+            "caseId": f"c{i}",
+            "attempt": 1,
+            "status": "pass" if i < 4 else "fail",
+            "latencyMs": 200,
+            "startedAt": t0 + timedelta(days=1, minutes=i),
+        })
+
+    # C: 10 runs, 10 passes -> passRate = 1.0 (drop from B: 0.4 - 1.0 = -0.6 < 0.10)
+    for i in range(10):
+        test_db["runs"].insert_one({
+            "_id": f"run_cp_c_{i}",
+            "projectId": proj,
+            "versionId": "C",
+            "caseId": f"c{i}",
+            "attempt": 1,
+            "status": "pass",
+            "latencyMs": 150,
+            "startedAt": t0 + timedelta(days=2, minutes=i),
+        })
+
+    # Materialize version_stats
+    success_rate_by_version(test_db, proj)
+
+    # Detect change points
+    from backend.app.analysis.stats import detect_change_points
+    change_points = detect_change_points(test_db, proj)
+
+    # Only B should be returned as a change point
+    assert len(change_points) == 1
+    cp = change_points[0]
+    assert cp["versionId"] == "B"
+    assert pytest.approx(cp["passRate"], 0.001) == 0.4
+    assert pytest.approx(cp["prevPassRate"], 0.001) == 1.0
+    assert pytest.approx(cp["passRateDrop"], 0.001) == 0.6
+
