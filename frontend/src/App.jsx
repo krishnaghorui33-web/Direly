@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import SimpleStoryView from './components/SimpleStoryView';
 import OverviewBanner from './components/OverviewBanner';
 import MetricCards from './components/MetricCards';
 import CohortMatrix from './components/CohortMatrix';
@@ -9,17 +8,16 @@ import FailurePatterns from './components/FailurePatterns';
 import CulpritAttribution from './components/CulpritAttribution';
 import EventProgression from './components/EventProgression';
 import FixVerification from './components/FixVerification';
+import BackendStatusTab from './components/BackendStatusTab';
 import TraceModal from './components/TraceModal';
-import { Sparkles, Sliders, Layers } from 'lucide-react';
+import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { 
   fetchComparison, 
-  fetchFindings, 
   triggerReplay, 
   DEMO_DATA 
 } from './services/api';
 
 export default function App() {
-  const [viewMode, setViewMode] = useState('story'); // 'story' (simple & friendly) | 'advanced' (deep logs)
   const [activeSection, setActiveSection] = useState('overview');
   const [data, setData] = useState(DEMO_DATA);
   const [isLiveApi, setIsLiveApi] = useState(false);
@@ -83,116 +81,146 @@ export default function App() {
 
       {/* Main Layout Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
+        {/* Left Sidebar Navigation */}
         <Sidebar
           activeSection={activeSection}
-          onSelectSection={(id) => {
-            setActiveSection(id);
-            if (viewMode === 'story' && (id === 'failures' || id === 'diagnosis')) {
-              // Stay in story mode or switch seamlessly
-            }
-          }}
+          onSelectSection={setActiveSection}
           isLiveApi={isLiveApi}
           onToggleApiMode={handleToggleApiMode}
         />
 
         {/* Content Workspace Area */}
-        <main className="flex-1 overflow-y-auto px-6 py-5 space-y-5 max-w-7xl">
-          {/* Top Mode Selector: Simple Friendly View vs Advanced Trace */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0f1422] border border-[#1e2638] rounded-xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Dashboard Presentation Mode:</span>
-              <span className="font-semibold text-white text-xs">
-                {viewMode === 'story' ? 'Guided Story (Simple & Friendly)' : 'Advanced Trace (Full Developer View)'}
-              </span>
+        <main className="flex-1 overflow-y-auto px-6 py-6 max-w-6xl">
+          {/* TAB 1: Detect Regressions */}
+          {activeSection === 'overview' && (
+            <div className="space-y-6 animate-fadeIn">
+              <OverviewBanner 
+                metrics={data.metrics} 
+                project={data.project} 
+              />
+              <MetricCards 
+                metrics={data.metrics} 
+              />
+              <CohortMatrix 
+                cohort={data.cohort} 
+              />
+
+              {/* Next Step Navigation CTA */}
+              <div className="pt-4 flex justify-end">
+                <button
+                  onClick={() => setActiveSection('failures')}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                >
+                  <span>Step 2: Inspect Failure Patterns</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+          )}
 
-            <div className="flex items-center gap-2 bg-[#0a0d14] p-1 rounded-lg border border-[#1c273e]">
-              <button
-                onClick={() => setViewMode('story')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
-                  viewMode === 'story'
-                    ? 'bg-purple-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Simple Story Mode (Recommended)</span>
-              </button>
+          {/* TAB 2: Failure Patterns */}
+          {activeSection === 'failures' && (
+            <div className="space-y-6 animate-fadeIn">
+              <FailurePatterns
+                patterns={data.failurePatterns}
+                selectedPatternId={selectedPatternId}
+                onSelectPattern={setSelectedPatternId}
+                selectedCaseId={selectedCaseId}
+                onSelectCase={setSelectedCaseId}
+              />
 
-              <button
-                onClick={() => setViewMode('advanced')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all ${
-                  viewMode === 'advanced'
-                    ? 'bg-purple-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Advanced Developer Trace</span>
-              </button>
+              {/* Navigation CTAs */}
+              <div className="pt-4 flex items-center justify-between">
+                <button
+                  onClick={() => setActiveSection('overview')}
+                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Overview</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('diagnosis')}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                >
+                  <span>Step 3: See Likely Culprit</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* VIEW 1: Simple Friendly Story View */}
-          {viewMode === 'story' ? (
-            <SimpleStoryView
-              data={data}
-              onTriggerReplay={handleReplay}
-              isReplaying={isReplaying}
-            />
-          ) : (
-            /* VIEW 2: Advanced Detailed Technical View */
-            <div className="space-y-6">
-              {/* Section 1: Overview & Metrics */}
-              <section id="overview" className="space-y-4">
-                <OverviewBanner 
-                  metrics={data.metrics} 
-                  project={data.project} 
-                />
-                <MetricCards 
-                  metrics={data.metrics} 
-                />
-                <CohortMatrix 
-                  cohort={data.cohort} 
-                />
-              </section>
+          {/* TAB 3: Diagnosis & Likely Culprit */}
+          {activeSection === 'diagnosis' && (
+            <div className="space-y-6 animate-fadeIn">
+              <CulpritAttribution
+                attribution={data.culpritAttribution}
+                onInspectTrace={() => setIsTraceModalOpen(true)}
+              />
 
-              {/* Section 2: Failure Patterns */}
-              <section id="failures" className="pt-2">
-                <FailurePatterns
-                  patterns={data.failurePatterns}
-                  selectedPatternId={selectedPatternId}
-                  onSelectPattern={setSelectedPatternId}
-                  selectedCaseId={selectedCaseId}
-                  onSelectCase={setSelectedCaseId}
-                />
-              </section>
+              <EventProgression
+                eventProgression={data.eventProgression}
+                selectedCaseId={selectedCaseId}
+              />
 
-              {/* Section 3: Diagnosis & Likely Culprit */}
-              <section id="diagnosis" className="pt-2">
-                <CulpritAttribution
-                  attribution={data.culpritAttribution}
-                  onInspectTrace={() => setIsTraceModalOpen(true)}
-                />
-              </section>
+              {/* Navigation CTAs */}
+              <div className="pt-4 flex items-center justify-between">
+                <button
+                  onClick={() => setActiveSection('failures')}
+                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Failure Patterns</span>
+                </button>
 
-              {/* Section 4: Execution Event Trace Timeline */}
-              <section id="trace" className="pt-2">
-                <EventProgression
-                  eventProgression={data.eventProgression}
-                  selectedCaseId={selectedCaseId}
-                />
-              </section>
+                <button
+                  onClick={() => setActiveSection('verification')}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 shadow-md transition-colors"
+                >
+                  <span>Step 4: Verify Fix with Replay</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
-              {/* Section 5: Fix Verification & Replay */}
-              <section id="verification" className="pt-2 pb-8">
-                <FixVerification
-                  verificationData={data.fixVerification}
-                  onTriggerReplay={handleReplay}
-                  isReplaying={isReplaying}
-                />
-              </section>
+          {/* TAB 4: Fix Verification & Replay */}
+          {activeSection === 'verification' && (
+            <div className="space-y-6 animate-fadeIn">
+              <FixVerification
+                verificationData={data.fixVerification}
+                onTriggerReplay={handleReplay}
+                isReplaying={isReplaying}
+              />
+
+              {/* Navigation CTAs */}
+              <div className="pt-4 flex items-center justify-between">
+                <button
+                  onClick={() => setActiveSection('diagnosis')}
+                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Diagnosis</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSection('backend')}
+                  className="px-4 py-2 bg-[#131a29] hover:bg-[#1a2337] border border-[#222e44] text-slate-300 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <span>Step 5: View System Architecture</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Backend & MongoDB Database Status */}
+          {activeSection === 'backend' && (
+            <div className="space-y-6 animate-fadeIn">
+              <BackendStatusTab
+                isLiveApi={isLiveApi}
+                onToggleApiMode={handleToggleApiMode}
+              />
             </div>
           )}
         </main>
