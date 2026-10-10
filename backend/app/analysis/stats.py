@@ -72,8 +72,9 @@ def success_rate_by_version(db: Database, project_id: str) -> List[Dict[str, Any
         {"$sort": {"verDoc.createdAt": 1, "_id": 1}},
         {
             "$project": {
-                "_id": 0,
+                "_id": "$_id",
                 "versionId": "$_id",
+                "projectId": {"$literal": project_id},
                 "runs": 1,
                 "passes": 1,
                 "failures": 1,
@@ -86,9 +87,46 @@ def success_rate_by_version(db: Database, project_id: str) -> List[Dict[str, Any
                 },
             }
         },
+        {
+            "$merge": {
+                "into": "version_stats",
+                "on": "_id",
+                "whenMatched": "replace",
+                "whenNotMatched": "insert",
+            }
+        },
     ]
 
-    return list(db["runs"].aggregate(pipeline))
+    list(db["runs"].aggregate(pipeline))
+
+    # Retrieve materialized results sorted by versions.createdAt
+    # Look up versions to ensure order matches version creation
+    docs = list(
+        db["version_stats"].aggregate([
+            {"$match": {"projectId": project_id}},
+            {
+                "$lookup": {
+                    "from": "versions",
+                    "localField": "_id",
+                    "foreignField": "_id",
+                    "as": "verDoc",
+                }
+            },
+            {"$unwind": {"path": "$verDoc", "preserveNullAndEmptyArrays": True}},
+            {"$sort": {"verDoc.createdAt": 1, "_id": 1}},
+            {
+                "$project": {
+                    "_id": 0,
+                    "versionId": 1,
+                    "runs": 1,
+                    "passes": 1,
+                    "failures": 1,
+                    "passRate": 1,
+                }
+            },
+        ])
+    )
+    return docs
 
 
 def failure_counts_by_fingerprint(

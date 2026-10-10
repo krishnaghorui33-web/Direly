@@ -59,6 +59,12 @@ def test_success_rate_by_version_pipeline(test_db):
     results = success_rate_by_version(test_db, proj)
     assert len(results) == 2
 
+    # Verify version_stats collection was materialized by $merge stage
+    stats_docs = list(test_db["version_stats"].find({"projectId": proj}))
+    assert len(stats_docs) == 2
+    version_ids_in_stats = {d["versionId"] for d in stats_docs}
+    assert version_ids_in_stats == {"A", "B"}
+
     # Ordered by createdAt: A first, then B
     res_a = results[0]
     assert res_a["versionId"] == "A"

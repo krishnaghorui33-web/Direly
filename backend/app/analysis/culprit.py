@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from pymongo.database import Database
 
 from backend.app.analysis.compare import compare_versions
+from backend.app.analysis.math_utils import calculate_z_test
 from backend.app.analysis.patterns import PATTERN_TO_COMPONENT
 
 
@@ -105,17 +106,21 @@ def find_suspects(
             "limits": limits_note,
         }
 
-    # b) Check regression threshold
-    if drop < 0.10:
+    # b) Check regression significance using two-proportion z-test
+    z_test = calculate_z_test(base_total, base_passes, cand_total, cand_passes)
+    if not z_test["significant"]:
         return {
             "status": "no_regression",
             "baselineVersionId": baseline_version_id,
             "candidateVersionId": candidate_version_id,
             "passRates": {"baseline": base_rate, "candidate": cand_rate},
             "drop": drop,
+            "zTest": z_test,
             "changedComponents": [],
             "suspects": [],
-            "uncertainty": [f"Pass-rate drop ({drop:.2%}) is below the regression threshold (10.00%)."],
+            "uncertainty": [
+                f"No statistically significant regression detected (drop: {z_test['drop']:.2%}, p-value: {z_test['p_value']:.4f}, z-score: {z_test['z_score']:.2f})."
+            ],
             "limits": limits_note,
         }
 

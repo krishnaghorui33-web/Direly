@@ -139,6 +139,9 @@ def test_no_regression_threshold(test_db):
     res = find_suspects(test_db, proj, "A", "B", min_runs=10, save=False)
     assert res["status"] == "no_regression"
     assert res["drop"] < 0.10
+    assert "zTest" in res
+    assert res["zTest"]["significant"] is False
+    assert "No statistically significant regression detected" in res["uncertainty"][0]
 
 
 def test_no_component_change_threshold(test_db):
